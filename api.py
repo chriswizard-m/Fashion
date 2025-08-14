@@ -7,11 +7,10 @@ import speech_recognition as sr
 from pydub import AudioSegment
 from openai import OpenAI
 import os
-from dotenv import load_dotenv
 import openai
 
 # Load variables from .env
-load_dotenv()
+
 
 # Get the key from environment
 openai.api_key = os.getenv("OPENAI_API_KEY")
