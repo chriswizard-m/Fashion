@@ -8,6 +8,7 @@ from pydub import AudioSegment
 from openai import OpenAI
 import os
 import openai
+import httpx
 
 # Load variables from .env
 
@@ -19,7 +20,10 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 # Init GPT client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=httpx.Client()  # This prevents automatic proxy injection
+)
 
 # Load model
 model = load_model("model/fashion_recommender_model.h5")
@@ -47,7 +51,7 @@ def transcribe_mp3(mp3_path):
     return recognizer.recognize_google(audio)
 
 def get_gpt_advice(user_text):
-    response = client.chat.completions.create(  # Updated method
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",  # Fixed model name
         messages=[
             {"role": "system", "content": "You are a helpful fashion advisor."},
@@ -55,7 +59,6 @@ def get_gpt_advice(user_text):
         ]
     )
     return response.choices[0].message.content
-
 
 @app.route("/predict", methods=["POST"])
 def predict():
