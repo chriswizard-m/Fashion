@@ -47,7 +47,7 @@ def transcribe_mp3(mp3_path):
     return recognizer.recognize_google(audio)
 
 def get_gpt_advice(user_text):
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are a helpful fashion advisor."},
