@@ -26,7 +26,15 @@ client = OpenAI(
 )
 
 # Load model
-model = load_model("model/fashion_recommender_model.h5")
+import os
+
+# Get absolute path to model
+model_dir = os.path.join(os.path.dirname(__file__), "model")
+os.makedirs(model_dir, exist_ok=True)  # Ensure directory exists
+model_path = os.path.join(model_dir, "fashion_recommender_model.h5")
+
+# Then load
+model = load_model(model_path)
 
 # Flask app
 app = Flask(__name__)
@@ -87,3 +95,9 @@ def predict():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+
+
+
