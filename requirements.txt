@@ -1,0 +1,6 @@
+Flask==2.3.3
+tensorflow==2.15.0
+Pillow
+numpy
+SpeechRecognition
+pydub
