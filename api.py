@@ -19,7 +19,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 # Init GPT client
-client = OpenAI(api_key=openai.api_key)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Load model
 model = load_model("model/fashion_recommender_model.h5")
@@ -47,14 +47,15 @@ def transcribe_mp3(mp3_path):
     return recognizer.recognize_google(audio)
 
 def get_gpt_advice(user_text):
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
+    response = client.chat.completions.create(  # Updated method
+        model="gpt-3.5-turbo",  # Fixed model name
         messages=[
             {"role": "system", "content": "You are a helpful fashion advisor."},
             {"role": "user", "content": user_text}
         ]
     )
     return response.choices[0].message.content
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
