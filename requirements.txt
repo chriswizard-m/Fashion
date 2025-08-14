@@ -1,6 +1,8 @@
 Flask==2.3.3
-tensorflow==2.15.0
+tensorflow==2.20.0
 Pillow
 numpy
 SpeechRecognition
 pydub
+openai==1.45.0
+gunicorn

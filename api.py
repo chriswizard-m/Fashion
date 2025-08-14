@@ -1,119 +1,86 @@
-
-
 import os
-import io
 import numpy as np
-from PIL import Image
 from flask import Flask, request, jsonify
 from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
-from flask_ngrok import run_with_ngrok
+from PIL import Image
 import speech_recognition as sr
 from pydub import AudioSegment
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+import openai
 
-# =====================
-# CONFIG
-# =====================
-MODEL_PATH = '/content/drive/MyDrive/fashion_recommender_model.h5'
+# Load variables from .env
+load_dotenv()
 
-# =====================
-# LOAD MODEL
-# =====================
-model = load_model(MODEL_PATH)
-print("✅ Model loaded successfully!")
+# Get the key from environment
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# =====================
-# FLASK APP
-# =====================
+
+
+
+# Init GPT client
+client = OpenAI(api_key=openai.api_key)
+
+# Load model
+model = load_model("model/fashion_recommender_model.h5")
+
+# Flask app
 app = Flask(__name__)
- # so Colab can host it
 
-# Preprocessing function for images
-def preprocess_image(image, target_size=(224, 224)):
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    image = image.resize(target_size)
-    image = img_to_array(image)
-    image = np.expand_dims(image, axis=0) / 255.0
-    return image
+# Class names for predictions
+CLASS_NAMES = ["T-shirt", "Dress", "Shirt", "Jeans", "Shoes", "Hat"]  # Example
 
-# Dummy function to simulate fashion advice
-def generate_style_suggestions(prediction):
-    return [
-        "Try pairing with neutral-colored shoes.",
-        "Add a statement necklace for a bold look.",
-        "Consider layering with a denim jacket."
-    ]
+def predict_image(img_path):
+    img = Image.open(img_path).resize((224, 224))
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+    prediction = model.predict(img_array)
+    class_index = np.argmax(prediction)
+    return CLASS_NAMES[class_index]
 
-# Convert audio to text
-def audio_to_text(audio_bytes):
+def transcribe_mp3(mp3_path):
+    wav_path = mp3_path.replace(".mp3", ".wav")
+    AudioSegment.from_mp3(mp3_path).export(wav_path, format="wav")
     recognizer = sr.Recognizer()
-    audio_path = "temp_audio.wav"
+    with sr.AudioFile(wav_path) as source:
+        audio = recognizer.record(source)
+    return recognizer.recognize_google(audio)
 
-    # Convert to WAV if not already
-    with open("temp_audio_input", "wb") as f:
-        f.write(audio_bytes)
-    try:
-        sound = AudioSegment.from_file("temp_audio_input")
-        sound.export(audio_path, format="wav")
-    except:
-        os.rename("temp_audio_input", audio_path)
-
-    with sr.AudioFile(audio_path) as source:
-        audio_data = recognizer.record(source)
-        text = recognizer.recognize_google(audio_data)
-    return text
-
-# =====================
-# ROUTES
-# =====================
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"message": "Fashion Recommender API is running with voice support."})
+def get_gpt_advice(user_text):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful fashion advisor."},
+            {"role": "user", "content": user_text}
+        ]
+    )
+    return response.choices[0].message.content
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    if "image" in request.files:
-        image_file = request.files["image"]
-        image = Image.open(io.BytesIO(image_file.read()))
-        processed_image = preprocess_image(image)
+    if "file" in request.files:
+        file = request.files["file"]
+        file_ext = file.filename.lower()
         
-        prediction = model.predict(processed_image)
-        suggestions = generate_style_suggestions(prediction)
+        if file_ext.endswith((".png", ".jpg", ".jpeg")):
+            file.save("temp.jpg")
+            prediction = predict_image("temp.jpg")
+            advice = get_gpt_advice(f"Suggest a better outfit for someone wearing {prediction}")
+            return jsonify({"type": "image", "prediction": prediction, "gpt_advice": advice})
         
-        return jsonify({
-            "status": "success",
-            "input_type": "image",
-            "predictions": prediction.tolist(),
-            "style_suggestions": suggestions
-        })
+        elif file_ext.endswith(".mp3"):
+            file.save("temp.mp3")
+            transcribed_text = transcribe_mp3("temp.mp3")
+            advice = get_gpt_advice(transcribed_text)
+            return jsonify({"type": "voice", "transcription": transcribed_text, "gpt_advice": advice})
     
-    elif "description" in request.form:
-        description = request.form["description"]
-        suggestions = [
-            f"Based on '{description}', try mixing textures for added depth.",
-            "Consider matching accessories to your outfit's accent color."
-        ]
-        return jsonify({"status": "success", "input_type": "text", "style_suggestions": suggestions})
+    elif "text" in request.json:
+        user_text = request.json["text"]
+        advice = get_gpt_advice(user_text)
+        return jsonify({"type": "text", "gpt_advice": advice})
 
-    elif "voice" in request.files:
-        voice_file = request.files["voice"].read()
-        try:
-            description = audio_to_text(voice_file)
-        except Exception as e:
-            return jsonify({"status": "error", "message": str(e)})
+    return jsonify({"error": "No valid input provided"}), 400
 
-        suggestions = [
-            f"Based on '{description}', try mixing textures for added depth.",
-            "Consider matching accessories to your outfit's accent color."
-        ]
-        return jsonify({"status": "success", "input_type": "voice", "transcribed_text": description, "style_suggestions": suggestions})
-
-    else:
-        return jsonify({"status": "error", "message": "No image, text, or voice provided."})
-
-# =====================
-# START APP
-# =====================
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
